@@ -69,7 +69,10 @@
       "router": {},
       "eas": {
         "projectId": "3e122c4a-19fa-4207-8df5-072328c3b00a"
-      }
+      },
+      "EXPO_PUBLIC_SUPABASE_URL": "https://kzjwbmqjvqtllfzoxela.supabase.co",
+      "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt6andibXFqdnF0bGxmem94ZWxhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5NDM1ODAsImV4cCI6MjA3MDUxOTU4MH0.oGun4Qs_7-yP0MuCJ0-NwW6VA1T9bjyls3viIxQlc2Y",
+      "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyBYI2ZiWhDcWPV1Bk1-flCIhBKrbVZbQ7w"
     }
   }
 }

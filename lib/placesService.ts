@@ -1,4 +1,5 @@
 import { Venue } from '@/constants/Venues';
+import Constants from 'expo-constants';
 
 // OAU Campus boundaries (approximate)
 const OAU_CAMPUS_BOUNDS = {
@@ -44,7 +45,9 @@ class PlacesService {
   private baseUrl = 'https://maps.googleapis.com/maps/api/place';
 
   constructor() {
-    this.apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyBYI2ZiWhDcWPV1Bk1-flCIhBKrbVZbQ7w';
+    this.apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 
+                  Constants.expoConfig?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 
+                  'AIzaSyBYI2ZiWhDcWPV1Bk1-flCIhBKrbVZbQ7w';
   }
 
   /**

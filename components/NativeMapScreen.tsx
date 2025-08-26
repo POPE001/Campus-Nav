@@ -32,6 +32,7 @@ import VenueBottomSheet from './VenueBottomSheet';
 import MapPreloader from './MapPreloader';
 import NavigationHeader from './NavigationHeader';
 import navigationService from '@/lib/navigationService';
+import Constants from 'expo-constants';
 
 // Navigation camera modes
 type NavigationCameraMode = 'overview' | 'following' | 'approach';
@@ -153,7 +154,9 @@ const TRANSPORT_MODES: TransportMode[] = [
   }
 ];
 
-const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyBYI2ZiWhDcWPV1Bk1-flCIhBKrbVZbQ7w';
+const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 
+                           Constants.expoConfig?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 
+                           'AIzaSyBYI2ZiWhDcWPV1Bk1-flCIhBKrbVZbQ7w';
 
 // Navigation utility functions
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {

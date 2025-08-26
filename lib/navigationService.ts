@@ -1,4 +1,5 @@
 import * as Location from 'expo-location';
+import Constants from 'expo-constants';
 import { CampusLocation } from './placesService';
 
 // Navigation types
@@ -92,7 +93,9 @@ class NavigationService {
   private stateCallbacks: Set<NavigationEventCallback> = new Set();
 
   constructor() {
-    this.apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyBYI2ZiWhDcWPV1Bk1-flCIhBKrbVZbQ7w';
+    this.apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 
+                  Constants.expoConfig?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 
+                  'AIzaSyBYI2ZiWhDcWPV1Bk1-flCIhBKrbVZbQ7w';
     this.navigationState = {
       status: 'idle',
       currentRoute: null,
