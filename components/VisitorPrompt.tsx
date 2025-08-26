@@ -26,9 +26,9 @@ export function VisitorPrompt() {
             <Ionicons name="person-add" size={80} color="white" />
           </View>
           
-          <Text style={styles.title}>Welcome to Campus Nav!</Text>
+          <Text style={styles.title}>Welcome to My OAU!</Text>
           <Text style={styles.subtitle}>
-            You're currently browsing as a visitor. Sign in to unlock personal features like schedules, saved locations, and more.
+            You're currently browsing as a visitor. You can explore campus maps, read public announcements, and navigate around campus. Sign in to unlock personal features like schedules, saved locations, and more.
           </Text>
           
           <View style={styles.featuresList}>
@@ -37,12 +37,16 @@ export function VisitorPrompt() {
               <Text style={styles.featureText}>Personal Class Schedules</Text>
             </View>
             <View style={styles.featureItem}>
+              <Ionicons name="newspaper" size={24} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.featureText}>Campus News & Public Announcements</Text>
+            </View>
+            <View style={styles.featureItem}>
               <Ionicons name="bookmark" size={24} color="rgba(255,255,255,0.8)" />
               <Text style={styles.featureText}>Save Favorite Locations</Text>
             </View>
             <View style={styles.featureItem}>
               <Ionicons name="notifications" size={24} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.featureText}>Event Notifications</Text>
+              <Text style={styles.featureText}>Personal Notifications</Text>
             </View>
             <View style={styles.featureItem}>
               <Ionicons name="people" size={24} color="rgba(255,255,255,0.8)" />
@@ -66,7 +70,7 @@ export function VisitorPrompt() {
           </TouchableOpacity>
           
           <Text style={styles.disclaimer}>
-            As a visitor, you can still use the campus map and navigation features!
+            As a visitor, you can use the campus map, read public campus news, and navigate around campus!
           </Text>
         </View>
       </LinearGradient>

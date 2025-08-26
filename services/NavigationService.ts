@@ -48,17 +48,27 @@ export const navigateToVenue = async (options: NavigationOptions): Promise<void>
  * Navigate using the campus map (preferred method)
  */
 const navigateWithCampusMap = async (venue: Venue): Promise<void> => {
-  // Navigate to the Map tab and trigger navigation to the venue
-  router.push({
-    pathname: '/(tabs)/index',
-    params: {
+  try {
+    console.log('🗺️ NAVIGATION SERVICE - Navigating to map with venue:', venue.name);
+    
+    // Store venue data in global state for NativeMapScreen to pick up
+    (global as any).pendingNavigation = {
       navigate: 'true',
       venueId: venue.id,
       venueName: venue.name,
       lat: venue.coordinates.latitude.toString(),
       lng: venue.coordinates.longitude.toString(),
-    },
-  });
+    };
+    
+    console.log('🗺️ NAVIGATION SERVICE - Stored navigation data, navigating to tabs');
+    
+    // Simply navigate to the tabs - the map will pick up the global state
+    router.push('/(tabs)');
+    
+  } catch (error) {
+    console.error('🗺️ NAVIGATION SERVICE - Error in navigateWithCampusMap:', error);
+    throw error;
+  }
 };
 
 /**
@@ -93,20 +103,16 @@ const navigateWithExternalMap = async (venue: Venue): Promise<void> => {
 };
 
 /**
- * Show navigation options to the user
+ * Show navigation options to the user (External Maps Only)
  */
 export const showNavigationOptions = (venue: Venue): void => {
   Alert.alert(
     `Navigate to ${venue.name}?`,
-    `Get directions to ${venue.description}`,
+    `Get directions to ${venue.description || venue.name}`,
     [
       { text: 'Cancel', style: 'cancel' },
       { 
-        text: 'Campus Navigation', 
-        onPress: () => startCampusNavigation(venue) 
-      },
-      { 
-        text: 'External Map', 
+        text: 'Get Directions', 
         onPress: () => navigateToVenue({ venue, preferCampusMap: false }) 
       },
     ]

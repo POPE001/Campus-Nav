@@ -1,16 +1,16 @@
 {
   "expo": {
-    "name": "campus-nav",
+    "name": "My OAU",
     "slug": "campus-nav",
     "owner": "oluwamayowaadeoni",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/oau_logo.png",
     "scheme": "campusnav",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/oau_logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -21,8 +21,9 @@
       }
     },
     "android": {
+      "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/oau_logo.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -35,19 +36,28 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
-      "package": "com.crosssafe.campusnav"
+      "package": "com.crosssafe.campusnav",
+      "googleServicesFile": "./android/app/google-services.json"
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/oau_logo.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow Campus Nav to use your location to show your position on the campus map."
+          "locationAlwaysAndWhenInUsePermission": "Allow My OAU to use your location to show your position on the campus map."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/oau_logo.png",
+          "color": "#667eea",
+          "mode": "production"
         }
       ],
       "expo-web-browser"
@@ -58,7 +68,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "89ca74a9-db23-4408-b872-2c0fe6af9ba7"
+        "projectId": "3e122c4a-19fa-4207-8df5-072328c3b00a"
       }
     }
   }

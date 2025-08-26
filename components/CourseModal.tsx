@@ -10,13 +10,16 @@ import {
   Alert,
   Platform,
   Switch,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { OAU_VENUES, Venue, searchVenues, getVenueById } from '@/constants/Venues';
 import { scheduleNotificationsForCourse, cancelNotificationsForCourse } from '@/services/NotificationService';
-import { showNavigationOptions } from '@/services/NavigationService';
+import { navigateToVenue } from '@/services/NavigationService';
+import { smartSearchService } from '@/lib/smartSearchService';
+import { CampusLocation } from '@/lib/placesService';
 
 interface Course {
   id: string;
@@ -57,7 +60,7 @@ interface FormData {
 interface CourseModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (courseData: Course) => void;
+  onSave: (courseData: Course) => Promise<void>;
   onDelete?: (courseId: string) => void;
   editingCourse: Course | null;
   userType: string | null;
@@ -91,33 +94,80 @@ export const CourseModal: React.FC<CourseModalProps> = ({
 }) => {
   const [venueSearch, setVenueSearch] = useState('');
   const [showVenueList, setShowVenueList] = useState(false);
-  const [filteredVenues, setFilteredVenues] = useState<Venue[]>([]);
+  const [filteredVenues, setFilteredVenues] = useState<CampusLocation[]>([]);
+  const [loadingVenues, setLoadingVenues] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [datePickerType, setDatePickerType] = useState<'exam' | 'deadline'>('exam');
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (venueSearch) {
-      const venues = searchVenues(venueSearch);
-      console.log('🏫 VENUE SEARCH - Query:', venueSearch);
-      console.log('🏫 VENUE SEARCH - Results:', venues.map(v => ({ name: v.name, code: v.code, building: v.building })));
-      setFilteredVenues(venues.slice(0, 10));
-    } else {
-      setFilteredVenues([]);
-    }
+    const searchVenues = async () => {
+      if (venueSearch && venueSearch.trim().length > 1) {
+        setLoadingVenues(true);
+        try {
+          console.log('🏫 SMART VENUE SEARCH - Query:', venueSearch);
+          const searchResult = await smartSearchService.searchCampus(venueSearch, {
+            maxResults: 10,
+          });
+          console.log('🏫 SMART VENUE SEARCH - Found:', searchResult.results.length, 'venues from', searchResult.source);
+          setFilteredVenues(searchResult.results);
+        } catch (error) {
+          console.error('🏫 SMART VENUE SEARCH - Error:', error);
+          setFilteredVenues([]);
+        } finally {
+          setLoadingVenues(false);
+        }
+      } else {
+        setFilteredVenues([]);
+      }
+    };
+
+    // Debounce the search to avoid too many API calls
+    const timeoutId = setTimeout(searchVenues, 300);
+    return () => clearTimeout(timeoutId);
   }, [venueSearch]);
 
   useEffect(() => {
-    if (editingCourse && editingCourse.venueId) {
-      const venue = getVenueById(editingCourse.venueId);
-      setVenueSearch(venue ? venue.name : '');
+    if (editingCourse) {
+      // Debug: Log what venue data is being loaded
+      console.log('📖 COURSE LOAD - Venue Data:', {
+        venueId: editingCourse.venueId,
+        location: editingCourse.location,
+        title: editingCourse.title,
+      });
+
+      // Handle venue display for existing courses
+      if (editingCourse.venueId) {
+        // Try to get venue from static database first (for backward compatibility)
+        const venue = getVenueById(editingCourse.venueId);
+        if (venue) {
+          console.log('📖 COURSE LOAD - Found in static DB:', venue.name);
+          setVenueSearch(venue.name);
+        } else {
+          // If not found in static DB, use the location field directly
+          console.log('📖 COURSE LOAD - Not in static DB, using location:', editingCourse.location);
+          setVenueSearch(editingCourse.location || '');
+        }
+      } else if (editingCourse.location) {
+        // Use location field if venueId is not available
+        console.log('📖 COURSE LOAD - No venueId, using location:', editingCourse.location);
+        setVenueSearch(editingCourse.location);
+      } else {
+        console.log('📖 COURSE LOAD - No venue data found');
+        setVenueSearch('');
+      }
     } else {
       setVenueSearch('');
     }
   }, [editingCourse]);
 
-  const selectVenue = (venue: Venue) => {
-    setFormData({ ...formData, venueId: venue.id, location: venue.name });
+  const selectVenue = (venue: CampusLocation) => {
+    setFormData({ 
+      ...formData, 
+      venueId: venue.id, 
+      location: venue.name 
+    });
     setVenueSearch(venue.name);
     setShowVenueList(false);
   };
@@ -128,21 +178,44 @@ export const CourseModal: React.FC<CourseModalProps> = ({
       return;
     }
 
-    if (formData.type === 'exam' && !formData.examDate) {
-      Alert.alert('Error', 'Please select an exam date');
-      return;
-    }
+    setLoading(true);
+    try {
+      if (formData.type === 'exam' && !formData.examDate) {
+        Alert.alert('Error', 'Please select an exam date');
+        setLoading(false);
+        return;
+      }
 
-    if (formData.type === 'deadline' && !formData.deadlineDate) {
-      Alert.alert('Error', 'Please select a deadline date');
-      return;
-    }
+      if (formData.type === 'deadline' && !formData.deadlineDate) {
+        Alert.alert('Error', 'Please select a deadline date');
+        setLoading(false);
+        return;
+      }
+
+    // Ensure venue data is properly set from the current search field
+    const finalFormData = {
+      ...formData,
+      location: venueSearch || formData.location || '', // Use current search text as location
+    };
 
     const courseData: Course = {
-      ...formData,
+      ...finalFormData,
       id: editingCourse?.id || Date.now().toString(),
       color: editingCourse?.color || '#667eea',
     };
+
+    // Debug: Log venue information being saved
+    console.log('💾 COURSE SAVE - Venue Data:', {
+      location: courseData.location,
+      venueId: courseData.venueId,
+      venueSearch: venueSearch,
+      title: courseData.title,
+    });
+
+    // Optional: Warn if no venue is provided
+    if (!courseData.location || courseData.location.trim() === '') {
+      console.warn('💾 COURSE SAVE - Warning: No venue location provided');
+    }
 
     // Cancel existing notifications for this course if editing
     if (editingCourse) {
@@ -164,7 +237,13 @@ export const CourseModal: React.FC<CourseModalProps> = ({
       }
     }
 
-    onSave(courseData);
+      await onSave(courseData);
+    } catch (error) {
+      console.error('Error saving course:', error);
+      Alert.alert('Error', 'Failed to save event. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDelete = () => {
@@ -210,7 +289,7 @@ export const CourseModal: React.FC<CourseModalProps> = ({
     }
   };
 
-  const renderVenueItem = ({ item }: { item: Venue }) => (
+  const renderVenueItem = ({ item }: { item: CampusLocation }) => (
     <View style={styles.venueItem}>
       <TouchableOpacity
         style={styles.venueMainContent}
@@ -218,15 +297,43 @@ export const CourseModal: React.FC<CourseModalProps> = ({
       >
         <View style={styles.venueInfo}>
           <Text style={styles.venueName}>{item.name}</Text>
-          <Text style={styles.venueDetails}>{item.category} • {item.building}</Text>
-          <Text style={styles.venueDescription}>{item.description}</Text>
+          <View style={styles.venueDetailsRow}>
+            <Text style={styles.venueDetails}>
+              {item.category}
+              {item.source === 'places_api' && (
+                <Text style={styles.googleIndicator}> • 📍 Google</Text>
+              )}
+            </Text>
+            {item.rating && (
+              <Text style={styles.venueRating}>⭐ {item.rating.toFixed(1)}</Text>
+            )}
+          </View>
+          {item.address && (
+            <Text style={styles.venueAddress}>{item.address}</Text>
+          )}
+          {item.description && (
+            <Text style={styles.venueDescription}>{item.description}</Text>
+          )}
         </View>
         <Ionicons name="checkmark-circle-outline" size={20} color="#667eea" />
       </TouchableOpacity>
       
       <TouchableOpacity
         style={styles.navigateButton}
-        onPress={() => showNavigationOptions(item)}
+        onPress={async () => {
+          // Convert CampusLocation to Venue format for in-app navigation
+          const venueForNav = {
+            id: item.id,
+            name: item.name,
+            building: item.building || item.address || 'Campus',
+            type: item.type,
+            category: item.category,
+            coordinates: item.coordinates,
+            description: item.description,
+            keywords: item.keywords || [],
+          };
+          await navigateToVenue({ venue: venueForNav, preferCampusMap: true });
+        }}
       >
         <Ionicons name="navigate-outline" size={18} color="#667eea" />
         <Text style={styles.navigateText}>Navigate</Text>
@@ -289,6 +396,7 @@ export const CourseModal: React.FC<CourseModalProps> = ({
                 value={formData.title}
                 onChangeText={(text) => setFormData({...formData, title: text})}
                 placeholder="e.g., Computer Science, Midterm Exam, Project Submission"
+                placeholderTextColor="#9ca3af"
               />
             </View>
 
@@ -299,6 +407,7 @@ export const CourseModal: React.FC<CourseModalProps> = ({
                 value={formData.code}
                 onChangeText={(text) => setFormData({...formData, code: text})}
                 placeholder="e.g., CSC 101, MTH 201"
+                placeholderTextColor="#9ca3af"
               />
             </View>
 
@@ -311,22 +420,116 @@ export const CourseModal: React.FC<CourseModalProps> = ({
                 value={formData.instructor}
                 onChangeText={(text) => setFormData({...formData, instructor: text})}
                 placeholder={userType === 'staff' ? 'e.g., CS 300 Level' : 'e.g., Dr. Smith'}
+                placeholderTextColor="#9ca3af"
               />
             </View>
 
             {/* Venue Selection with Map Integration */}
-            <View style={styles.inputGroup}>
+            <View style={[styles.inputGroup, styles.venueGroup]}>
               <Text style={styles.inputLabel}>Venue</Text>
+              
+              {/* Show current venue info if editing existing course */}
+              {editingCourse && venueSearch && (
+                <View style={styles.currentVenueContainer}>
+                  <View style={styles.currentVenueInfo}>
+                    <Ionicons name="location" size={16} color="#667eea" />
+                    <Text style={styles.currentVenueText}>{venueSearch}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.currentVenueNavButton}
+                    onPress={async () => {
+                      try {
+                        // First try to get venue from static database
+                        let venueForNav = editingCourse.venueId 
+                          ? getVenueById(editingCourse.venueId)
+                          : null;
+                        
+                        if (venueForNav) {
+                          // Found in static database - use in-app navigation
+                          console.log('🗺️ EXISTING VENUE NAV - Using static venue with in-app navigation:', venueForNav.name);
+                          await navigateToVenue({ venue: venueForNav, preferCampusMap: true });
+                        } else {
+                          // Not in static database - try to find using smart search
+                          console.log('🗺️ EXISTING VENUE NAV - Searching for:', venueSearch);
+                          const searchResult = await smartSearchService.searchCampus(venueSearch, {
+                            maxResults: 1,
+                          });
+                          
+                          if (searchResult.results.length > 0) {
+                            // Found venue using smart search - convert to Venue format
+                            const foundVenue = searchResult.results[0];
+                            const venueForNav = {
+                              id: foundVenue.id,
+                              name: foundVenue.name,
+                              building: foundVenue.building || foundVenue.address || 'Campus',
+                              type: foundVenue.type,
+                              category: foundVenue.category,
+                              coordinates: foundVenue.coordinates,
+                              description: foundVenue.description,
+                              keywords: foundVenue.keywords || [],
+                            };
+                            console.log('🗺️ EXISTING VENUE NAV - Found venue, using in-app navigation:', venueForNav.name);
+                            await navigateToVenue({ venue: venueForNav, preferCampusMap: true });
+                          } else {
+                            // Fallback to OAU campus center for custom locations
+                            const venueForNav = {
+                              id: 'custom-location',
+                              name: venueSearch,
+                              building: venueSearch,
+                              type: 'facilities' as const,
+                              category: 'Campus',
+                              coordinates: {
+                                latitude: 7.5629, // OAU campus center
+                                longitude: 4.5200
+                              },
+                              description: 'Custom location',
+                              keywords: [venueSearch.toLowerCase()],
+                            };
+                            console.log('🗺️ EXISTING VENUE NAV - Using campus center for:', venueSearch);
+                            await navigateToVenue({ venue: venueForNav, preferCampusMap: true });
+                          }
+                        }
+                      } catch (error) {
+                        console.error('🗺️ EXISTING VENUE NAV - Error:', error);
+                        // Fallback to campus center on error
+                        const venueForNav = {
+                          id: 'custom-location',
+                          name: venueSearch,
+                          building: venueSearch,
+                          type: 'facilities' as const,
+                          category: 'Campus',
+                          coordinates: {
+                            latitude: 7.5629,
+                            longitude: 4.5200
+                          },
+                          description: 'Custom location',
+                          keywords: [venueSearch.toLowerCase()],
+                        };
+                        await navigateToVenue({ venue: venueForNav, preferCampusMap: true });
+                      }
+                    }}
+                  >
+                    <Ionicons name="navigate-outline" size={16} color="#667eea" />
+                    <Text style={styles.currentVenueNavText}>Navigate</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              
               <View style={styles.venueInputContainer}>
                 <TextInput
                   style={[styles.input, styles.venueInput]}
                   value={venueSearch}
                   onChangeText={(text) => {
                     setVenueSearch(text);
-                    setFormData({...formData, location: text});
+                    setFormData({
+                      ...formData, 
+                      location: text,
+                      venueId: '' // Clear venueId when typing custom location
+                    });
                     setShowVenueList(text.length > 0);
                   }}
                   placeholder="Search for venue or enter custom location"
+                  placeholderTextColor="#9ca3af"
                 />
                 <TouchableOpacity
                   style={styles.venueSearchButton}
@@ -336,7 +539,16 @@ export const CourseModal: React.FC<CourseModalProps> = ({
                 </TouchableOpacity>
               </View>
 
-              {showVenueList && filteredVenues.length > 0 && (
+              {/* Loading indicator */}
+              {loadingVenues && (
+                <View style={styles.loadingContainer}>
+                  <Ionicons name="hourglass-outline" size={16} color="#667eea" />
+                  <Text style={styles.loadingText}>Searching venues...</Text>
+                </View>
+              )}
+
+              {/* Venue results */}
+              {showVenueList && filteredVenues.length > 0 && !loadingVenues && (
                 <View style={styles.venueList}>
                   <View style={styles.venueListContainer}>
                     {filteredVenues.map((venue) => (
@@ -345,6 +557,14 @@ export const CourseModal: React.FC<CourseModalProps> = ({
                       </View>
                     ))}
                   </View>
+                </View>
+              )}
+
+              {/* No results message */}
+              {showVenueList && filteredVenues.length === 0 && !loadingVenues && venueSearch.trim().length > 1 && (
+                <View style={styles.noResultsContainer}>
+                  <Text style={styles.noResultsText}>No venues found for "{venueSearch}"</Text>
+                  <Text style={styles.noResultsSubtext}>Try a different search term or enter a custom location</Text>
                 </View>
               )}
             </View>
@@ -447,6 +667,7 @@ export const CourseModal: React.FC<CourseModalProps> = ({
                 value={formData.description}
                 onChangeText={(text) => setFormData({...formData, description: text})}
                 placeholder="Add notes or additional details..."
+                placeholderTextColor="#9ca3af"
                 multiline={true}
                 numberOfLines={3}
               />
@@ -505,12 +726,22 @@ export const CourseModal: React.FC<CourseModalProps> = ({
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={styles.saveButton}
+              style={[styles.saveButton, loading && styles.saveButtonDisabled]}
               onPress={handleSave}
+              disabled={loading}
             >
-              <Text style={styles.saveButtonText}>
-                {editingCourse ? 'Update' : 'Save'}
-              </Text>
+              {loading ? (
+                <View style={styles.saveButtonContent}>
+                  <ActivityIndicator size="small" color="white" />
+                  <Text style={[styles.saveButtonText, { marginLeft: 8 }]}>
+                    {editingCourse ? 'Updating...' : 'Saving...'}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.saveButtonText}>
+                  {editingCourse ? 'Update' : 'Save'}
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -584,6 +815,7 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     backgroundColor: '#f8f9fa',
+    color: '#000000', // Added black text color for better visibility
   },
   textArea: {
     height: 80,
@@ -615,6 +847,46 @@ const styles = StyleSheet.create({
   selectedTypeButtonText: {
     color: 'white',
   },
+  venueGroup: {
+    position: 'relative',
+    zIndex: 1000,
+  },
+  currentVenueContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  currentVenueInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  currentVenueText: {
+    fontSize: 14,
+    color: '#495057',
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  currentVenueNavButton: {
+    backgroundColor: '#667eea',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  currentVenueNavText: {
+    fontSize: 12,
+    color: 'white',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
   venueInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -631,12 +903,25 @@ const styles = StyleSheet.create({
     borderColor: '#e9ecef',
   },
   venueList: {
-    marginTop: 8,
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    marginTop: 4,
     backgroundColor: '#ffffff',
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e9ecef',
     maxHeight: 200,
+    zIndex: 1001,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   venueListContainer: {
     maxHeight: 180,
@@ -662,10 +947,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#343a40',
   },
+  venueDetailsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2,
+  },
   venueDetails: {
     fontSize: 12,
     color: '#6c757d',
-    marginTop: 2,
+    flex: 1,
+  },
+  googleIndicator: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  venueRating: {
+    fontSize: 12,
+    color: '#FF9500',
+    fontWeight: '600',
+  },
+  venueAddress: {
+    fontSize: 11,
+    color: '#8c757d',
+    marginTop: 1,
+    fontStyle: 'italic',
   },
   venueDescription: {
     fontSize: 11,
@@ -729,6 +1036,7 @@ const styles = StyleSheet.create({
   },
   picker: {
     height: 50,
+    color: '#000000',
   },
   dateButton: {
     flexDirection: 'row',
@@ -791,6 +1099,69 @@ const styles = StyleSheet.create({
     color: '#6c757d',
     fontStyle: 'italic',
   },
+  loadingContainer: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    zIndex: 1001,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#667eea',
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  noResultsContainer: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    padding: 16,
+    backgroundColor: '#fff3cd',
+    borderRadius: 8,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: '#ffeaa7',
+    zIndex: 1001,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  noResultsText: {
+    fontSize: 14,
+    color: '#856404',
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  noResultsSubtext: {
+    fontSize: 12,
+    color: '#856404',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
   modalFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -815,6 +1186,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#667eea',
     marginLeft: 'auto',
+  },
+  saveButtonDisabled: {
+    backgroundColor: '#9ca3af',
+    opacity: 0.7,
+  },
+  saveButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   saveButtonText: {
     color: 'white',

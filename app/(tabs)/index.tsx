@@ -1,15 +1,19 @@
-import NativeMap from '@/components/NativeMap';
+import NativeMapScreen from '@/components/NativeMapScreen';
 import { LocationTester } from '@/components/LocationTester';
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { useTheme } from '@/contexts/ThemeContext';
+import { useFontSize } from '@/contexts/FontSizeContext';
 
 export default function TabOneScreen() {
   const params = useLocalSearchParams();
   const [showLocationTester, setShowLocationTester] = useState(false);
+  const { theme } = useTheme();
+  const { fontSizes } = useFontSize();
   
   useEffect(() => {
-    console.log('🗺️ MAP SCREEN - Component mounted/rendered');
+    console.log('🗺️ MAP SCREEN - Native maps version mounted/rendered');
     
     // Check if navigation parameters are provided
     if (params.navigate && params.venueId) {
@@ -19,23 +23,20 @@ export default function TabOneScreen() {
         lat: params.lat,
         lng: params.lng,
       });
-      
-      // Here you could trigger navigation in the map
-      // For now, we'll let the SimpleMap handle this through URL parameters
     }
   }, [params]);
 
-  console.log('🗺️ MAP SCREEN - Render called');
+  console.log('🗺️ MAP SCREEN - Native maps render called');
   
   if (showLocationTester) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <View style={[styles.header, { backgroundColor: theme.card }]}>
           <TouchableOpacity 
-            style={styles.backButton} 
+            style={[styles.backButton, { backgroundColor: theme.primary }]} 
             onPress={() => setShowLocationTester(false)}
           >
-            <Text style={styles.backButtonText}>← Back to Map</Text>
+            <Text style={[styles.backButtonText, { fontSize: fontSizes.medium }]}>← Back to Map</Text>
           </TouchableOpacity>
         </View>
         <LocationTester />
@@ -43,11 +44,7 @@ export default function TabOneScreen() {
     );
   }
   
-  return (
-    <View style={styles.container}>
-      <NativeMap navigationParams={params} />
-    </View>
-  );
+  return <NativeMapScreen navigationParams={params} />;
 }
 
 const styles = StyleSheet.create({

@@ -8,13 +8,24 @@ import {
   Alert,
   SafeAreaView,
   Platform,
+  Dimensions,
+  Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
+import { courseService, Course as DatabaseCourse } from '@/lib/courseService';
+import { databaseNotificationService } from '@/lib/notificationService';
 import { getVenueById } from '@/constants/Venues';
 import { CourseModal } from './CourseModal';
 import { CourseDetailModal } from './CourseDetailModal';
+import { ContentCreationModal } from './ContentCreationModal';
+import { useTheme } from '@/contexts/ThemeContext';
+import { useFontSize } from '@/contexts/FontSizeContext';
+import { useScreenStyles } from '@/hooks/useScreenStyles';
+import { ScreenContainer } from './ScreenContainer';
+import { ScreenHeader } from './ScreenHeader';
 
 interface Course {
   id: string;
@@ -37,7 +48,7 @@ interface Course {
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 const TIME_SLOTS = [
-  '8:00', '9:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'
+  '8:00', '9:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'
 ];
 
 const COURSE_COLORS = [
@@ -45,13 +56,50 @@ const COURSE_COLORS = [
   '#43e97b', '#38f9d7', '#ffecd2', '#fcb69f', '#a8edea', '#fed6e3'
 ];
 
+const { width, height } = Dimensions.get('window');
+
 const Timetable = () => {
+  // Theme and responsive hooks
+  const { theme, isDark } = useTheme();
+  const { fontSizes } = useFontSize();
+  const screenStyles = useScreenStyles();
+
+  // Fallback values in case hooks return undefined
+  const safeFontSizes = fontSizes || {
+    small: 12,
+    medium: 14,
+    large: 18,
+    caption: 10,
+  };
+  
+  const safeScreenStyles = screenStyles || {
+    spacing: {
+      xs: 4,
+      small: 8,
+      medium: 16,
+      large: 24,
+      xlarge: 32,
+      xxlarge: 48,
+    },
+    borderRadius: {
+      small: 4,
+      medium: 8,
+      large: 12,
+    },
+  };
+
   const [courses, setCourses] = useState<Course[]>([]);
   const [userType, setUserType] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [contentModalVisible, setContentModalVisible] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Animation values
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const slideAnim = React.useRef(new Animated.Value(50)).current;
   const [formData, setFormData] = useState({
     title: '',
     code: '',
@@ -71,107 +119,199 @@ const Timetable = () => {
 
   useEffect(() => {
     checkUserType();
-    loadSampleData();
+    loadCourses();
+    initializeNotifications();
+    
+    // Entrance animations
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, []);
+
+  const initializeNotifications = async () => {
+    try {
+      console.log('📚 TIMETABLE - Initializing notification service...');
+      await databaseNotificationService.initialize();
+      console.log('📚 TIMETABLE - Notification service initialized');
+    } catch (error) {
+      console.error('📚 TIMETABLE - Error initializing notifications:', error);
+    }
+  };
 
   const checkUserType = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
       const userMetadata = session.user.user_metadata;
-      setUserType(userMetadata?.user_type || 'student');
+      const detectedUserType = userMetadata?.user_type || 'student';
+      console.log('📚 TIMETABLE - User metadata:', userMetadata);
+      console.log('📚 TIMETABLE - Detected user type:', detectedUserType);
+      console.log('📚 TIMETABLE - Should show megaphone button:', detectedUserType === 'staff');
+      setUserType(detectedUserType);
     }
   };
 
-  const loadSampleData = () => {
-    // Sample course data with enhanced features
-    const sampleCourses: Course[] = [
-      {
-        id: '1',
-        title: 'Computer Science 101',
-        code: 'CSC 101',
-        instructor: 'Dr. Smith',
-        location: 'Computer Laboratory 1',
-        venueId: 'science',
-        day: 'Monday',
-        startTime: '9:00',
-        endTime: '11:00',
-        color: COURSE_COLORS[0],
-        type: 'class',
-        description: 'Introduction to programming concepts',
-        reminderEnabled: true,
-        reminderMinutes: 15,
-      },
-      {
-        id: '2',
-        title: 'Mathematics Midterm',
-        code: 'MTH 201',
-        instructor: 'Prof. Johnson',
-        location: 'Science Amphitheatre',
-        venueId: 'science',
-        day: 'Tuesday',
-        startTime: '10:00',
-        endTime: '12:00',
-        color: COURSE_COLORS[1],
-        type: 'exam',
-        description: 'Calculus and algebra midterm examination',
-        reminderEnabled: true,
-        reminderMinutes: 30,
-        examDate: '2024-02-15',
-      },
-      {
-        id: '3',
-        title: 'Physics Lab',
-        code: 'PHY 301',
-        instructor: 'Dr. Brown',
-        location: 'Physics Laboratory 1',
-        venueId: 'science',
-        day: 'Wednesday',
-        startTime: '14:00',
-        endTime: '16:00',
-        color: COURSE_COLORS[2],
-        type: 'class',
-        description: 'Experimental physics and data analysis',
-        reminderEnabled: true,
-        reminderMinutes: 10,
-      },
-      {
-        id: '4',
-        title: 'Research Proposal',
-        code: 'ENG 102',
-        instructor: 'Dr. Wilson',
-        location: 'Faculty of Arts',
-        venueId: 'arts',
-        day: 'Thursday',
-        startTime: '11:00',
-        endTime: '12:00',
-        color: COURSE_COLORS[3],
-        type: 'deadline',
-        description: 'Submit final research proposal',
-        reminderEnabled: true,
-        reminderMinutes: 60,
-        deadlineDate: '2024-02-20',
-      },
-      {
-        id: '5',
-        title: 'Chemistry Lab',
-        code: 'CHM 201',
-        instructor: 'Prof. Davis',
-        location: 'Chemistry Laboratory 1',
-        venueId: 'science',
-        day: 'Friday',
-        startTime: '9:00',
-        endTime: '11:00',
-        color: COURSE_COLORS[4],
-        type: 'class',
-        description: 'Organic chemistry practical session',
-        reminderEnabled: true,
-        reminderMinutes: 20,
-      },
-    ];
-    setCourses(sampleCourses);
+  // Convert database course to UI course format
+  const convertDatabaseCourse = (dbCourse: DatabaseCourse): Course => ({
+    id: dbCourse.id,
+    title: dbCourse.title,
+    code: dbCourse.code,
+    instructor: dbCourse.instructor,
+    location: dbCourse.location,
+    venueId: dbCourse.venue_id,
+    day: dbCourse.day,
+    startTime: dbCourse.start_time,
+    endTime: dbCourse.end_time,
+    color: dbCourse.color,
+    type: dbCourse.type,
+    description: dbCourse.description,
+    reminderEnabled: dbCourse.reminder_enabled,
+    reminderMinutes: dbCourse.reminder_minutes,
+    examDate: dbCourse.exam_date,
+    deadlineDate: dbCourse.deadline_date,
+  });
+
+  const loadCourses = async () => {
+    try {
+      console.log('📚 TIMETABLE - Loading courses from database...');
+      setLoading(true);
+
+      const { data, error } = await courseService.getCourses();
+      
+      if (error) {
+        console.error('📚 TIMETABLE - Error loading courses:', error);
+        
+        // If no courses exist, initialize with sample data
+        if (error.message?.includes('No rows') || data === null || data.length === 0) {
+          console.log('📚 TIMETABLE - No courses found, initializing sample data...');
+          await courseService.initializeSampleData();
+          
+          // Try loading again
+          const { data: retryData, error: retryError } = await courseService.getCourses();
+          if (retryError) {
+            Alert.alert('Error', 'Failed to load courses. Please try again.');
+            setCourses([]);
+          } else {
+            const uiCourses = (retryData || []).map(convertDatabaseCourse);
+            setCourses(uiCourses);
+            console.log('📚 TIMETABLE - Loaded courses after initialization:', uiCourses.length);
+          }
+        } else {
+          Alert.alert('Error', 'Failed to load courses. Please try again.');
+          setCourses([]);
+        }
+      } else {
+        const uiCourses = (data || []).map(convertDatabaseCourse);
+        setCourses(uiCourses);
+        console.log('📚 TIMETABLE - Loaded courses:', uiCourses.length);
+      }
+    } catch (error) {
+      console.error('📚 TIMETABLE - Exception loading courses:', error);
+      Alert.alert('Error', 'Failed to load courses. Please check your connection.');
+      setCourses([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // Convert UI course to database format
+  const convertToDatabaseCourse = (uiCourse: Course): Omit<DatabaseCourse, 'user_id' | 'created_at' | 'updated_at'> => ({
+    id: uiCourse.id,
+    title: uiCourse.title,
+    code: uiCourse.code,
+    instructor: uiCourse.instructor,
+    location: uiCourse.location,
+    venue_id: uiCourse.venueId,
+    day: uiCourse.day,
+    start_time: uiCourse.startTime,
+    end_time: uiCourse.endTime,
+    color: uiCourse.color,
+    type: uiCourse.type,
+    description: uiCourse.description,
+    reminder_enabled: uiCourse.reminderEnabled,
+    reminder_minutes: uiCourse.reminderMinutes,
+    exam_date: uiCourse.examDate,
+    deadline_date: uiCourse.deadlineDate,
+  });
 
+  const handleSaveCourse = async (courseData: Course) => {
+    try {
+      setLoading(true);
+      console.log('📚 TIMETABLE - Saving course:', courseData.title);
+
+      if (editingCourse) {
+        // Update existing course
+        const dbCourseData = convertToDatabaseCourse(courseData);
+        const { data, error } = await courseService.updateCourse(editingCourse.id, dbCourseData);
+        
+        if (error) {
+          console.error('📚 TIMETABLE - Error updating course:', error);
+          Alert.alert('Error', 'Failed to update course. Please try again.');
+        } else {
+          // Update local state
+          setCourses(courses.map(c => c.id === editingCourse.id ? courseData : c));
+          setModalVisible(false);
+          setEditingCourse(null);
+          console.log('📚 TIMETABLE - Course updated successfully');
+        }
+      } else {
+        // Create new course
+        const dbCourseData = convertToDatabaseCourse(courseData);
+        const { data, error } = await courseService.createCourse(dbCourseData);
+        
+        if (error) {
+          console.error('📚 TIMETABLE - Error creating course:', error);
+          Alert.alert('Error', 'Failed to create course. Please try again.');
+        } else {
+          // Add to local state
+          const newCourse = convertDatabaseCourse(data!);
+          setCourses([...courses, newCourse]);
+          setModalVisible(false);
+          console.log('📚 TIMETABLE - Course created successfully');
+        }
+      }
+    } catch (error) {
+      console.error('📚 TIMETABLE - Exception saving course:', error);
+      Alert.alert('Error', 'Failed to save course. Please check your connection.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteCourse = async (courseId: string) => {
+    try {
+      setLoading(true);
+      console.log('📚 TIMETABLE - Deleting course:', courseId);
+
+      const { error } = await courseService.deleteCourse(courseId);
+      
+      if (error) {
+        console.error('📚 TIMETABLE - Error deleting course:', error);
+        Alert.alert('Error', 'Failed to delete course. Please try again.');
+      } else {
+        // Remove from local state
+        setCourses(courses.filter(c => c.id !== courseId));
+        setModalVisible(false);
+        setDetailModalVisible(false);
+        setEditingCourse(null);
+        setSelectedCourse(null);
+        console.log('📚 TIMETABLE - Course deleted successfully');
+      }
+    } catch (error) {
+      console.error('📚 TIMETABLE - Exception deleting course:', error);
+      Alert.alert('Error', 'Failed to delete course. Please check your connection.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const openModal = (course?: Course) => {
     if (course) {
@@ -278,6 +418,7 @@ const Timetable = () => {
 
   const renderCourseCard = (course: Course, duration: number) => {
     const venue = course.venueId ? getVenueById(course.venueId) : null;
+    const cardHeight = Math.max(duration * (safeScreenStyles.spacing.xxlarge + 16) - 8, 80);
     
     return (
       <TouchableOpacity
@@ -286,108 +427,303 @@ const Timetable = () => {
           styles.courseCard,
           { 
             backgroundColor: course.color,
-            height: duration * 60 - 4, // 60px per hour minus margin
+            height: cardHeight,
+            minHeight: 80,
+            borderRadius: safeScreenStyles.borderRadius.medium,
+            shadowColor: isDark ? course.color : '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: isDark ? 0.4 : 0.2,
+            shadowRadius: 6,
+            elevation: 4,
           }
         ]}
         onPress={() => openDetailModal(course)}
+        activeOpacity={0.8}
       >
-        <View style={styles.courseHeader}>
-          <Text style={styles.courseTitle} numberOfLines={1}>
-            {getTypeIcon(course.type)} {course.code}
-          </Text>
-          {course.reminderEnabled && (
-            <Ionicons name="notifications" size={10} color="rgba(255, 255, 255, 0.8)" />
-          )}
-        </View>
-        <Text style={styles.courseSubtitle} numberOfLines={1}>
-          {course.title}
-        </Text>
-        <Text style={styles.courseInfo} numberOfLines={1}>
-          📍 {course.location}
-        </Text>
-
-        <Text style={styles.courseInfo} numberOfLines={1}>
-          👨‍🏫 {course.instructor}
-        </Text>
-        <Text style={styles.courseTime}>
-          {course.startTime} - {course.endTime}
-        </Text>
+        <LinearGradient
+          colors={[course.color + 'E0', course.color]}
+          style={[StyleSheet.absoluteFill, { borderRadius: safeScreenStyles.borderRadius.medium }]}
+        >
+          <View style={[styles.courseCardContent, { padding: safeScreenStyles.spacing.small }]}>
+            <View style={styles.courseHeader}>
+              <View style={styles.courseHeaderLeft}>
+                <Text style={[styles.courseTypeIcon, { fontSize: safeFontSizes.small }]}>
+                  {getTypeIcon(course.type)}
+                </Text>
+                <Text style={[styles.courseTitle, { 
+                  fontSize: safeFontSizes.small,
+                  fontWeight: '700',
+                }]} numberOfLines={1}>
+                  {course.code}
+                </Text>
+              </View>
+              <View style={styles.courseHeaderRight}>
+                {course.reminderEnabled && (
+                  <View style={[styles.reminderBadge, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
+                    <Ionicons name="notifications" size={12} color="rgba(255, 255, 255, 0.9)" />
+                  </View>
+                )}
+              </View>
+            </View>
+            
+            <Text style={[styles.courseSubtitle, { 
+              fontSize: safeFontSizes.caption,
+              fontWeight: '600',
+              marginBottom: safeScreenStyles.spacing.xs,
+            }]} numberOfLines={cardHeight > 100 ? 2 : 1}>
+              {course.title}
+            </Text>
+            
+            {cardHeight > 100 && (
+              <>
+                <View style={styles.courseInfoRow}>
+                  <Ionicons name="location-outline" size={10} color="rgba(255, 255, 255, 0.8)" />
+                  <Text style={[styles.courseInfo, { 
+                    fontSize: safeFontSizes.caption - 1,
+                    marginLeft: 4,
+                  }]} numberOfLines={1}>
+                    {course.location}
+                  </Text>
+                </View>
+                
+                <View style={styles.courseInfoRow}>
+                  <Ionicons name="person-outline" size={10} color="rgba(255, 255, 255, 0.8)" />
+                  <Text style={[styles.courseInfo, { 
+                    fontSize: safeFontSizes.caption - 1,
+                    marginLeft: 4,
+                  }]} numberOfLines={1}>
+                    {course.instructor}
+                  </Text>
+                </View>
+              </>
+            )}
+            
+            <View style={styles.courseTimeContainer}>
+              <Ionicons name="time-outline" size={10} color="rgba(255, 255, 255, 0.8)" />
+              <Text style={[styles.courseTime, { 
+                fontSize: safeFontSizes.caption - 1,
+                fontWeight: '600',
+                marginLeft: 4,
+              }]}>
+                {course.startTime} - {course.endTime}
+              </Text>
+            </View>
+          </View>
+        </LinearGradient>
       </TouchableOpacity>
     );
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={['#667eea', '#764ba2']}
-        style={styles.header}
-      >
-        <Text style={styles.headerTitle}>
-          {userType === 'staff' ? 'Teaching Schedule' : 'My Timetable'}
-        </Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => openModal()}
-        >
-          <Ionicons name="add" size={24} color="white" />
-        </TouchableOpacity>
-      </LinearGradient>
+  // Dynamic styles based on theme and screen size
+  const dynamicStyles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    content: {
+      flex: 1,
+      padding: safeScreenStyles.spacing.medium,
+    },
+    timetableContainer: {
+      backgroundColor: theme.surface,
+      borderRadius: safeScreenStyles.borderRadius.large,
+      overflow: 'hidden',
+      shadowColor: isDark ? '#000' : '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isDark ? 0.3 : 0.1,
+      shadowRadius: 12,
+      elevation: 8,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      backgroundColor: theme.border + '40',
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+    },
+    timeRow: {
+      flexDirection: 'row',
+      minHeight: safeScreenStyles.spacing.xxlarge + 16,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border + '60',
+    },
+    timeColumn: {
+      width: safeScreenStyles.spacing.xxlarge + 8,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.card,
+      borderRightWidth: 1,
+      borderRightColor: theme.border,
+    },
+    dayColumn: {
+      flex: 1,
+      minHeight: safeScreenStyles.spacing.xxlarge + 16,
+      borderRightWidth: 1,
+      borderRightColor: theme.border + '60',
+      padding: 2,
+    },
+  });
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.timetableContainer}>
-          {/* Header row with days */}
-          <View style={styles.headerRow}>
-            <View style={styles.timeColumn}>
-              <Text style={styles.timeHeaderText}>Time</Text>
-            </View>
-            {DAYS.map(day => (
-              <View key={day} style={styles.dayColumn}>
-                <Text style={styles.dayHeaderText}>{day.substring(0, 3)}</Text>
+  return (
+    <ScreenContainer>
+      <ScreenHeader
+        title={userType === 'staff' ? 'Teaching Schedule' : 'My Timetable'}
+        subtitle={`${courses.length} ${courses.length === 1 ? 'course' : 'courses'} this week`}
+        colors={isDark ? ['#667eea', '#764ba2'] : ['#667eea', '#764ba2']}
+        rightComponent={
+          <View style={styles.headerButtons}>
+            {console.log('📚 TIMETABLE - Rendering header, userType:', userType, 'isStaff:', userType === 'staff')}
+            {userType === 'staff' && (
+              <TouchableOpacity
+                style={[styles.actionButton, { 
+                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                  borderColor: 'rgba(255, 206, 84, 0.5)',
+                }]}
+                onPress={() => setContentModalVisible(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="megaphone" size={18} color="white" />
+                <Text style={[styles.buttonLabel, { fontSize: safeFontSizes.caption }]}>
+                  Create Post
+                </Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={[styles.actionButton, { 
+                backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                borderColor: 'rgba(255, 255, 255, 0.4)',
+              }]}
+              onPress={() => openModal()}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add" size={20} color="white" />
+              <Text style={[styles.buttonLabel, { fontSize: safeFontSizes.caption }]}>
+                Add Class
+              </Text>
+            </TouchableOpacity>
+          </View>
+        }
+      />
+
+      {loading && (
+        <Animated.View style={[styles.loadingOverlay, { backgroundColor: theme.background + 'F0' }]}>
+          <View style={[styles.loadingContent, { backgroundColor: theme.surface }]}>
+            <Animated.View style={{ transform: [{ rotate: '360deg' }] }}>
+              <Ionicons name="time" size={32} color={theme.primary} />
+            </Animated.View>
+            <Text style={[styles.loadingText, { color: theme.text, fontSize: safeFontSizes.large }]}>
+              Loading your timetable...
+            </Text>
+            <Text style={[styles.loadingSubtext, { color: theme.textSecondary, fontSize: safeFontSizes.small }]}>
+              Fetching courses and schedule
+            </Text>
+          </View>
+        </Animated.View>
+      )}
+
+      <Animated.View 
+        style={[
+          dynamicStyles.content,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          }
+        ]}
+      >
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <View style={dynamicStyles.timetableContainer}>
+            {/* Header row with days */}
+            <View style={dynamicStyles.headerRow}>
+              <View style={dynamicStyles.timeColumn}>
+                <Text style={[styles.timeHeaderText, { color: theme.text, fontSize: safeFontSizes.small }]}>
+                  Time
+                </Text>
               </View>
+              {DAYS.map(day => (
+                <View key={day} style={dynamicStyles.dayColumn}>
+                  <Text style={[styles.dayHeaderText, { 
+                    color: theme.text, 
+                    fontSize: safeFontSizes.medium,
+                    fontWeight: '700',
+                  }]}>
+                    {day.substring(0, 3)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Time slots and courses */}
+            {TIME_SLOTS.map((time, index) => (
+              <Animated.View 
+                key={time} 
+                style={[
+                  dynamicStyles.timeRow,
+                  {
+                    opacity: fadeAnim,
+                    transform: [{
+                      translateX: slideAnim.interpolate({
+                        inputRange: [0, 50],
+                        outputRange: [0, index % 2 === 0 ? -20 : 20],
+                      })
+                    }]
+                  }
+                ]}
+              >
+                <View style={dynamicStyles.timeColumn}>
+                  <Text style={[styles.timeText, { 
+                    color: theme.textSecondary, 
+                    fontSize: safeFontSizes.small,
+                    fontWeight: '600',
+                  }]}>
+                    {time}
+                  </Text>
+                </View>
+                {DAYS.map(day => {
+                  const course = getCourseForTimeSlot(day, time);
+                  const duration = course ? getCourseDuration(course, time) : 0;
+                  
+                  return (
+                    <View key={`${day}-${time}`} style={dynamicStyles.dayColumn}>
+                      {course && duration > 0 ? (
+                        renderCourseCard(course, duration)
+                      ) : (
+                        <View style={[styles.emptySlot, { backgroundColor: 'transparent' }]} />
+                      )}
+                    </View>
+                  );
+                })}
+              </Animated.View>
             ))}
           </View>
+        </ScrollView>
+      </Animated.View>
 
-          {/* Time slots and courses */}
-          {TIME_SLOTS.map(time => (
-            <View key={time} style={styles.timeRow}>
-              <View style={styles.timeColumn}>
-                <Text style={styles.timeText}>{time}</Text>
-              </View>
-              {DAYS.map(day => {
-                const course = getCourseForTimeSlot(day, time);
-                const duration = course ? getCourseDuration(course, time) : 0;
-                
-                return (
-                  <View key={`${day}-${time}`} style={styles.dayColumn}>
-                    {course && duration > 0 ? (
-                      renderCourseCard(course, duration)
-                    ) : (
-                      <View style={styles.emptySlot} />
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          ))}
-        </View>
-      </ScrollView>
+      {/* Floating Action Button */}
+      <Animated.View 
+        style={[
+          styles.fabContainer,
+          {
+            transform: [{ scale: fadeAnim }],
+          }
+        ]}
+      >
+        <TouchableOpacity
+          style={[styles.fab, { backgroundColor: theme.primary }]}
+          onPress={() => openModal()}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="add" size={28} color="white" />
+        </TouchableOpacity>
+        <Text style={[styles.fabLabel, { color: theme.text, fontSize: safeFontSizes.caption }]}>
+          Add Schedule
+        </Text>
+      </Animated.View>
 
       {/* Enhanced Course Modal */}
       <CourseModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
-        onSave={(courseData) => {
-          if (editingCourse) {
-            setCourses(courses.map(c => c.id === editingCourse.id ? courseData : c));
-          } else {
-            setCourses([...courses, courseData]);
-          }
-          setModalVisible(false);
-        }}
-        onDelete={(courseId) => {
-          setCourses(courses.filter(c => c.id !== courseId));
-          setModalVisible(false);
-        }}
+        onSave={handleSaveCourse}
+        onDelete={handleDeleteCourse}
         editingCourse={editingCourse}
         userType={userType}
         formData={formData}
@@ -400,144 +736,215 @@ const Timetable = () => {
         course={selectedCourse}
         onClose={() => setDetailModalVisible(false)}
         onEdit={handleEditFromDetail}
-        onDelete={deleteCourse}
+        onDelete={handleDeleteCourse}
       />
-    </SafeAreaView>
+
+      {/* Content Creation Modal */}
+      {userType === 'staff' && (
+        <ContentCreationModal
+          visible={contentModalVisible}
+          onClose={() => setContentModalVisible(false)}
+          onSuccess={() => {
+            // Optionally refresh or show success message
+            console.log('Content creation successful');
+          }}
+        />
+      )}
+    </ScreenContainer>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  header: {
+  // Header styles
+  headerButtons: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 10,
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    paddingTop: Platform.OS === 'ios' ? 20 : 20,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  actionButton: {
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    minWidth: 80,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  buttonLabel: {
     color: 'white',
+    fontWeight: '600',
+    marginTop: 2,
+    textAlign: 'center',
   },
+  // Legacy styles for backwards compatibility
   addButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 20,
-    padding: 8,
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  timetableContainer: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderRadius: 24,
+    padding: 12,
+    minWidth: 48,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  headerRow: {
-    flexDirection: 'row',
-    backgroundColor: '#f1f3f5',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
+  contentButton: {
+    paddingHorizontal: 16,
   },
-  timeRow: {
-    flexDirection: 'row',
-    minHeight: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f3f5',
-  },
-  timeColumn: {
-    width: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f9fa',
-    borderRightWidth: 1,
-    borderRightColor: '#e9ecef',
-  },
-  dayColumn: {
-    flex: 1,
-    minHeight: 60,
-    borderRightWidth: 1,
-    borderRightColor: '#f1f3f5',
-    padding: 2,
-  },
+
+  // Time table header styles
   timeHeaderText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#495057',
+    fontWeight: '700',
+    textAlign: 'center',
   },
   dayHeaderText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#495057',
+    fontWeight: '700',
     textAlign: 'center',
-    paddingVertical: 12,
+    paddingVertical: 16,
   },
   timeText: {
-    fontSize: 12,
-    color: '#6c757d',
-    fontWeight: '500',
+    fontWeight: '600',
+    textAlign: 'center',
   },
+
+  // Course card styles
   emptySlot: {
     flex: 1,
     minHeight: 56,
   },
   courseCard: {
-    borderRadius: 8,
-    padding: 8,
-    margin: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
+    margin: 3,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  courseCardContent: {
+    flex: 1,
+    justifyContent: 'space-between',
   },
   courseHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 6,
+  },
+  courseHeaderLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 2,
+    flex: 1,
+  },
+  courseHeaderRight: {
+    alignItems: 'flex-end',
+  },
+  courseTypeIcon: {
+    marginRight: 6,
   },
   courseTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
     color: 'white',
     flex: 1,
   },
+  reminderBadge: {
+    borderRadius: 12,
+    padding: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   courseSubtitle: {
-    fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: 'rgba(255, 255, 255, 0.95)',
+    lineHeight: 16,
+  },
+  courseInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 2,
   },
   courseInfo: {
-    fontSize: 8,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginBottom: 1,
+    color: 'rgba(255, 255, 255, 0.85)',
+    flex: 1,
   },
-  mapLink: {
-    marginVertical: 1,
-  },
-  mapLinkText: {
-    fontSize: 8,
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontWeight: '500',
+  courseTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 'auto',
+    paddingTop: 4,
   },
   courseTime: {
-    fontSize: 8,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '500',
-    marginTop: 2,
+    color: 'rgba(255, 255, 255, 0.9)',
   },
 
+  // Floating Action Button styles
+  fabContainer: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  fab: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    marginBottom: 6,
+  },
+  fabLabel: {
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+
+  // Loading styles
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  loadingContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+    minWidth: 200,
+  },
+  loadingText: {
+    fontWeight: '700',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  loadingSubtext: {
+    fontWeight: '500',
+    marginTop: 8,
+    textAlign: 'center',
+    opacity: 0.8,
+  },
 });
 
 export default Timetable;

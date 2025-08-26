@@ -13,7 +13,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { getVenueById } from '@/constants/Venues';
-import { showNavigationOptions, getEstimatedWalkingTime, getDistanceToVenue } from '@/services/NavigationService';
+import { navigateToVenue, getEstimatedWalkingTime, getDistanceToVenue } from '@/services/NavigationService';
+import { smartSearchService } from '@/lib/smartSearchService';
 
 const { width } = Dimensions.get('window');
 
@@ -53,7 +54,34 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
 }) => {
   if (!course) return null;
 
-  const venue = course.venueId ? getVenueById(course.venueId) : null;
+  // Get venue from static database if available
+  const staticVenue = course.venueId ? getVenueById(course.venueId) : null;
+  
+  // Check if we have any venue information (static DB, custom location, or Google Places)
+  const hasVenueInfo = staticVenue || (course.location && course.location.trim() !== '');
+  
+  // Create display venue object for any type of venue
+  const displayVenue = staticVenue || (course.location ? {
+    id: course.venueId || 'custom-location',
+    name: course.location,
+    category: 'Campus Location',
+    building: course.location.includes('Engineering') ? 'Engineering Complex' : 
+              course.location.includes('Science') ? 'Science Complex' :
+              course.location.includes('Arts') ? 'Arts Building' : 'Campus',
+    description: staticVenue ? staticVenue.description : `Class venue: ${course.location}`,
+    coordinates: {
+      latitude: 7.5629, // OAU campus center (fallback)
+      longitude: 4.5200
+    }
+  } : null);
+
+  console.log('🏛️ COURSE DETAIL - Venue Info:', {
+    courseTitle: course.title,
+    staticVenue: staticVenue?.name || 'Not in static DB',
+    courseLocation: course.location || 'No location',
+    hasVenueInfo,
+    displayVenueName: displayVenue?.name || 'No display venue'
+  });
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -73,11 +101,73 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
     }
   };
 
-  const handleNavigateToVenue = () => {
-    if (venue) {
-      showNavigationOptions(venue);
-    } else {
-      Alert.alert('Navigation', 'No venue information available for this course.');
+  const handleNavigateToVenue = async () => {
+    try {
+      console.log('🗺️ COURSE DETAIL NAV - Starting navigation process');
+      
+      // Close the modal first to avoid navigation conflicts
+      onClose();
+      
+      // Small delay to let modal close, then navigate
+      setTimeout(() => {
+        (async () => {
+          try {
+            if (staticVenue) {
+              // Static database venue - use in-app navigation
+              console.log('🗺️ COURSE DETAIL NAV - Using static venue with in-app navigation:', staticVenue.name);
+              await navigateToVenue({ venue: staticVenue, preferCampusMap: true });
+            } else if (course.location && course.location.trim() !== '') {
+              // Custom or Google Places venue - try to find coordinates
+              console.log('🗺️ COURSE DETAIL NAV - Searching for venue:', course.location);
+              const searchResult = await smartSearchService.searchCampus(course.location, {
+                maxResults: 1,
+              });
+              
+              if (searchResult.results.length > 0) {
+                // Found venue using smart search - convert to Venue format
+                const foundVenue = searchResult.results[0];
+                const venueForNav = {
+                  id: foundVenue.id,
+                  name: foundVenue.name,
+                  building: foundVenue.building || foundVenue.address || 'Campus',
+                  type: foundVenue.type,
+                  category: foundVenue.category,
+                  coordinates: foundVenue.coordinates,
+                  description: foundVenue.description,
+                  keywords: foundVenue.keywords || [],
+                };
+                console.log('🗺️ COURSE DETAIL NAV - Found via search, using in-app navigation:', venueForNav.name);
+                await navigateToVenue({ venue: venueForNav, preferCampusMap: true });
+              } else {
+                // Fallback to campus center
+                const fallbackVenue = {
+                  id: 'custom-location',
+                  name: course.location,
+                  building: course.location,
+                  type: 'facilities' as const,
+                  category: 'Campus',
+                  coordinates: {
+                    latitude: 7.5629, // OAU campus center
+                    longitude: 4.5200
+                  },
+                  description: `Class venue: ${course.location}`,
+                  keywords: [course.location.toLowerCase()],
+                };
+                console.log('🗺️ COURSE DETAIL NAV - Using campus center fallback with in-app navigation');
+                await navigateToVenue({ venue: fallbackVenue, preferCampusMap: true });
+              }
+            } else {
+              Alert.alert('Navigation', 'No venue information available for this course.');
+            }
+          } catch (innerError) {
+            console.error('🗺️ COURSE DETAIL NAV - Inner error:', innerError);
+            Alert.alert('Navigation Error', 'Unable to get directions at this time.');
+          }
+        })();
+      }, 300); // Wait 300ms for modal to close
+    } catch (error) {
+      console.error('🗺️ COURSE DETAIL NAV - Outer error:', error);
+      Alert.alert('Navigation Error', 'Unable to get directions at this time.');
     }
   };
 
@@ -131,8 +221,8 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
     });
   };
 
-  // Calculate distance and walking time to venue
-  const distance = venue ? getDistanceToVenue(venue) : null;
+  // Calculate distance and walking time to venue (use static venue if available, otherwise skip distance calc for now)
+  const distance = staticVenue ? getDistanceToVenue(staticVenue) : null;
   const walkingTime = distance ? getEstimatedWalkingTime(distance) : null;
 
   return (
@@ -191,15 +281,25 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({
             </View>
 
             {/* Venue Information */}
-            {venue && (
+            {hasVenueInfo && displayVenue && (
               <View style={styles.infoSection}>
                 <Text style={styles.sectionTitle}>📍 Venue Details</Text>
                 <View style={styles.venueCard}>
                   <View style={styles.venueHeader}>
                     <View style={styles.venueInfo}>
-                      <Text style={styles.venueName}>{venue.name}</Text>
-                      <Text style={styles.venueCategory}>{venue.category} • {venue.building}</Text>
-                      <Text style={styles.venueDescription}>{venue.description}</Text>
+                      <Text style={styles.venueName}>{displayVenue.name}</Text>
+                      <View style={styles.venueMetaRow}>
+                        <Text style={styles.venueCategory}>{displayVenue.category} • {displayVenue.building}</Text>
+                        {!staticVenue && course.location && (
+                          <View style={styles.venueTypeIndicator}>
+                            <Ionicons name="location" size={12} color="#007AFF" />
+                            <Text style={styles.venueTypeText}>
+                              {course.venueId && course.venueId !== '' ? 'Google' : 'Custom'}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.venueDescription}>{displayVenue.description}</Text>
                     </View>
                     {distance && (
                       <View style={styles.distanceInfo}>
@@ -402,10 +502,31 @@ const styles = StyleSheet.create({
     color: '#2c3e50',
     marginBottom: 4,
   },
+  venueMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   venueCategory: {
     fontSize: 12,
     color: '#7f8c8d',
-    marginBottom: 4,
+    flex: 1,
+  },
+  venueTypeIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e3f2fd',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 8,
+  },
+  venueTypeText: {
+    fontSize: 10,
+    color: '#007AFF',
+    fontWeight: '600',
+    marginLeft: 2,
   },
   venueDescription: {
     fontSize: 12,

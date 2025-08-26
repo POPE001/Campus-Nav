@@ -2,11 +2,15 @@ import { useFonts } from 'expo-font';
 import { SplashScreen, Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import 'react-native-reanimated';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { NavigationModal } from '@/components/NavigationModal';
 import { setGlobalNavigationHandler } from '@/services/NavigationService';
 import { SplashScreen as CustomSplashScreen } from '@/components/SplashScreen';
+import Toast from 'react-native-toast-message';
+import { ThemeProvider } from '@/contexts/ThemeContext';
+import { FontSizeProvider } from '@/contexts/FontSizeContext';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -108,6 +112,7 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         targetVenueId={navigationTargetVenueId}
         onClose={handleCloseNavigation}
       />
+      <Toast />
     </>
   );
 };
@@ -133,18 +138,24 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="user-type" options={{ headerShown: false }} />
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="signup" options={{ headerShown: false }} />
-        <Stack.Screen name="student-signup" options={{ headerShown: false }} />
-        <Stack.Screen name="staff-signup" options={{ headerShown: false }} />
-        <Stack.Screen name="complete-profile" options={{ headerShown: false }} />
-        <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-      </Stack>
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <FontSizeProvider>
+          <AuthProvider>
+            <Stack>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="user-type" options={{ headerShown: false }} />
+              <Stack.Screen name="login" options={{ headerShown: false }} />
+              <Stack.Screen name="signup" options={{ headerShown: false }} />
+              <Stack.Screen name="student-signup" options={{ headerShown: false }} />
+              <Stack.Screen name="staff-signup" options={{ headerShown: false }} />
+              <Stack.Screen name="complete-profile" options={{ headerShown: false }} />
+              <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
+              <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+            </Stack>
+          </AuthProvider>
+        </FontSizeProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

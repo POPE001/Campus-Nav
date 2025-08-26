@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useColorScheme } from '@/components/useColorScheme';
 import { supabase } from '@/lib/supabase';
+import { useTheme } from '@/contexts/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
@@ -22,9 +23,10 @@ interface TabItemProps {
   isFocused: boolean;
   onPress: () => void;
   color: string;
+  theme: any;
 }
 
-function TabItem({ label, iconName, iconNameFocused, isFocused, onPress, color }: TabItemProps) {
+function TabItem({ label, iconName, iconNameFocused, isFocused, onPress, color, theme }: TabItemProps) {
   return (
     <TouchableOpacity
       style={[styles.tabItem, isFocused && styles.tabItemFocused]}
@@ -41,7 +43,7 @@ function TabItem({ label, iconName, iconNameFocused, isFocused, onPress, color }
       <Text
         style={[
           styles.tabLabel,
-          { color: isFocused ? '#667eea' : color },
+          { color: isFocused ? theme.primary : color },
           isFocused && styles.tabLabelFocused,
         ]}
       >
@@ -52,8 +54,7 @@ function TabItem({ label, iconName, iconNameFocused, isFocused, onPress, color }
 }
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const { isDark, theme } = useTheme();
   const [authState, setAuthState] = useState({
     isAuthenticated: false,
     userType: null as string | null,
@@ -169,16 +170,23 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
         iconNameFocused: 'person',
         route: 'profile',
       },
+      {
+        key: 'settings',
+        label: 'Settings',
+        iconName: 'settings-outline',
+        iconNameFocused: 'settings',
+        route: 'settings',
+      },
     ];
 
-    // Only show Schedule, Notifications, and Profile for authenticated users (students and staff)
+    // Only show Schedule, Notifications, Profile, and Settings for authenticated users (students and staff)
     const shouldShowExtraTabs = authState.isAuthenticated && authState.userType !== 'visitor';
     console.log('CustomTabBar - Should show extra tabs:', shouldShowExtraTabs, authState);
     
     if (shouldShowExtraTabs) {
-      console.log('CustomTabBar - Adding Schedule, Notifications, and Profile tabs');
+      console.log('CustomTabBar - Adding Schedule, Notifications, Profile, and Settings tabs');
       console.log('CustomTabBar - Final tabs:', allTabs);
-      return allTabs; // Show all tabs (Map, Schedule, Notifications, Profile)
+      return allTabs; // Show all tabs (Map, Schedule, Notifications, Profile, Settings)
     } else {
       console.log('CustomTabBar - Not adding extra tabs - not authenticated or visitor');
       const baseTabs = [allTabs[0]]; // Only show Map tab
@@ -250,14 +258,15 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                   iconNameFocused={tab.iconNameFocused}
                   isFocused={isFocused}
                   onPress={onPress}
-                  color={isDark ? '#8e8e93' : '#8e8e93'}
+                  color={theme.textSecondary}
+                  theme={theme}
                 />
               );
             })}
           </View>
         </BlurView>
       ) : (
-        <View style={[styles.tabBar, { backgroundColor: isDark ? '#1a1a1a' : '#ffffff' }]}>
+        <View style={[styles.tabBar, { backgroundColor: theme.card }]}>
           <View style={styles.tabBarContent}>
             {visibleTabs.map((tab, index) => {
               // Find the actual route index in state.routes
@@ -308,7 +317,8 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                   iconNameFocused={tab.iconNameFocused}
                   isFocused={isFocused}
                   onPress={onPress}
-                  color={isDark ? '#8e8e93' : '#8e8e93'}
+                  color={theme.textSecondary}
+                  theme={theme}
                 />
               );
             })}

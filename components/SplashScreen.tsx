@@ -6,6 +6,7 @@ import {
   Dimensions,
   Animated,
   StatusBar,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -103,7 +104,11 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
             ]}
           >
             <View style={styles.logoCircle}>
-              <Ionicons name="map" size={80} color="white" />
+              <Image 
+                source={require('../assets/images/oau_logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
             </View>
           </Animated.View>
 
@@ -116,8 +121,8 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onAnimationComplete 
               },
             ]}
           >
-            <Text style={styles.appName}>Campus Nav</Text>
-            <Text style={styles.tagline}>Navigate Your Campus</Text>
+            <Text style={styles.appName}>My OAU</Text>
+            <Text style={styles.tagline}>Your Campus Companion</Text>
             <View style={styles.universityContainer}>
               <Text style={styles.universityText}>Obafemi Awolowo University</Text>
             </View>
@@ -243,6 +248,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 20,
     elevation: 10,
+  },
+  logoImage: {
+    width: 120,
+    height: 120,
   },
   textContainer: {
     alignItems: 'center',

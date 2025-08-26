@@ -7,7 +7,8 @@ import {
   Animated,
   Dimensions,
   ScrollView,
-  SafeAreaView
+  SafeAreaView,
+  Image
 } from 'react-native';
 import React, { useRef, useEffect } from 'react';
 import { useRouter } from 'expo-router';
@@ -92,13 +93,51 @@ const UserTypeSelection = () => {
           <View style={styles.header}>
             <View style={styles.logoContainer}>
               <View style={styles.logoCircle}>
-                <Ionicons name="map" size={height < 700 ? 35 : 45} color="white" />
+                <Image 
+                  source={require('../assets/images/oau_logo.png')}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
               </View>
             </View>
-            <Text style={styles.title}>Welcome to Campus Nav</Text>
+            <Text style={styles.title}>Welcome to My OAU</Text>
             <Text style={styles.subtitle}>
               Your ultimate guide to navigating{'\n'}Obafemi Awolowo University
             </Text>
+          </View>
+
+          {/* Prominent Sign In Section for Returning Users */}
+          <TouchableOpacity 
+            style={styles.prominentSignInButton}
+            onPress={() => router.push('/login')}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={['rgba(255, 255, 255, 0.25)', 'rgba(255, 255, 255, 0.15)']}
+              style={styles.signInGradient}
+            >
+              <View style={styles.signInContent}>
+                <LinearGradient
+                  colors={['#667eea', '#764ba2']}
+                  style={styles.signInIcon}
+                >
+                  <Ionicons name="log-in" size={24} color="white" />
+                </LinearGradient>
+                <View style={styles.signInTextContainer}>
+                  <Text style={styles.signInTitle}>Already have an account?</Text>
+                  <Text style={styles.signInSubtitle}>Quick access to your personalized campus hub</Text>
+                </View>
+                <View style={styles.signInArrow}>
+                  <Ionicons name="arrow-forward" size={20} color="white" />
+                </View>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <View style={styles.dividerContainer}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or create a new account</Text>
+            <View style={styles.dividerLine} />
           </View>
 
           {/* User Type Cards */}
@@ -218,17 +257,7 @@ const UserTypeSelection = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Login Link */}
-          <TouchableOpacity 
-            style={styles.loginLink}
-            onPress={() => router.push('/login')}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.loginText}>
-              Already have an account? 
-              <Text style={styles.loginBold}> Sign In</Text>
-            </Text>
-          </TouchableOpacity>
+
 
               {/* Decorative Elements */}
               <View style={styles.decorativeContainer}>
@@ -260,7 +289,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 50,
     minHeight: height - 100, // Ensure minimum height but allow scrolling
   },
   header: {
@@ -287,6 +316,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 20,
     elevation: 10,
+  },
+  logoImage: {
+    width: height < 700 ? 60 : 70,
+    height: height < 700 ? 60 : 70,
   },
   title: {
     fontSize: height < 700 ? 28 : 32, // Responsive font size
@@ -370,26 +403,76 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: 'white',
   },
-  loginLink: {
-    alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 15,
+  // Prominent Sign In Button Styles
+  prominentSignInButton: {
+    marginBottom: height < 700 ? 20 : 24,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  signInGradient: {
+    padding: height < 700 ? 18 : 22,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderRadius: 20,
   },
-  loginText: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '400',
+  signInContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  loginBold: {
-    fontWeight: 'bold',
+  signInIcon: {
+    width: height < 700 ? 52 : 58,
+    height: height < 700 ? 52 : 58,
+    borderRadius: height < 700 ? 26 : 29,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  signInTextContainer: {
+    flex: 1,
+    marginLeft: 18,
+    marginRight: 12,
+  },
+  signInTitle: {
+    fontSize: height < 700 ? 17 : 19,
+    fontWeight: '700',
     color: 'white',
-    textDecorationLine: 'underline',
+    marginBottom: 4,
+    letterSpacing: 0.3,
+  },
+  signInSubtitle: {
+    fontSize: height < 700 ? 13 : 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    lineHeight: height < 700 ? 18 : 20,
+    fontWeight: '500',
+  },
+  signInArrow: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  
+  // Divider Styles
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: height < 700 ? 16 : 20,
+    paddingHorizontal: 10,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  dividerText: {
+    fontSize: height < 700 ? 12 : 14,
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontWeight: '500',
+    marginHorizontal: 16,
+    textAlign: 'center',
   },
   decorativeContainer: {
     position: 'absolute',

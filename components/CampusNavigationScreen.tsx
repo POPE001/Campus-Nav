@@ -13,6 +13,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Venue, getVenueById } from '@/constants/Venues';
+import NavigationHeader from './NavigationHeader';
+import navigationService from '@/lib/navigationService';
+import { CampusLocation } from '@/lib/placesService';
 
 interface CampusNavigationScreenProps {
   targetVenueId: string;
@@ -331,15 +334,60 @@ export const CampusNavigationScreen: React.FC<CampusNavigationScreenProps> = ({
     return `${hours}h ${remainingMinutes}m`;
   };
 
-  const startNavigation = () => {
+  const startNavigation = async () => {
     if (!currentLocation || !targetVenue) {
       Alert.alert('Error', 'Location or destination not available.');
       return;
     }
-    setIsNavigating(true);
+
+    try {
+      // Convert Venue to CampusLocation format for navigationService
+      const destination: CampusLocation = {
+        id: targetVenue.id,
+        name: targetVenue.name,
+        description: targetVenue.description,
+        coordinates: targetVenue.coordinates,
+        category: targetVenue.category,
+        source: 'static',
+        type: targetVenue.type,
+        building: targetVenue.building,
+        keywords: targetVenue.keywords
+      };
+
+      // Start navigation using the navigation service
+      const success = await navigationService.startNavigation(destination, 'walking', {
+        onStatusChange: (status) => {
+          console.log('🧭 Campus Navigation status changed:', status);
+        },
+        onStepChange: (step, stepIndex) => {
+          console.log('🧭 Campus Navigation step changed:', step.instruction);
+          setCurrentStep({
+            instruction: step.instruction,
+            distance: step.distance.value,
+            duration: step.duration.value,
+            direction: 'straight' // Default direction
+          });
+        },
+        onDistanceUpdate: (distance, time) => {
+          setDistance(distance);
+          setDuration(time);
+        }
+      });
+
+      if (success) {
+        setIsNavigating(true);
+      } else {
+        Alert.alert('Navigation Error', 'Failed to start navigation. Please try again.');
+      }
+    } catch (error) {
+      console.error('🧭 Campus Navigation - Error starting navigation:', error);
+      Alert.alert('Navigation Error', 'Failed to start navigation. Please try again.');
+    }
   };
 
   const stopNavigation = () => {
+    // Stop navigation service
+    navigationService.forceStopNavigation();
     setIsNavigating(false);
     onClose();
   };
@@ -382,21 +430,29 @@ export const CampusNavigationScreen: React.FC<CampusNavigationScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <LinearGradient colors={['#667eea', '#764ba2']} style={styles.header}>
-        <View style={styles.headerTop}>
-          <TouchableOpacity style={styles.closeButton} onPress={stopNavigation}>
-            <Ionicons name="close" size={24} color="white" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Campus Navigation</Text>
-          <View style={styles.placeholder} />
-        </View>
-        
-        <View style={styles.destinationInfo}>
-          <Text style={styles.destinationName}>{targetVenue.name}</Text>
-          <Text style={styles.destinationDesc}>{targetVenue.description}</Text>
-        </View>
-      </LinearGradient>
+      {/* Enhanced Navigation Header */}
+      <NavigationHeader
+        isVisible={isNavigating}
+        onClose={stopNavigation}
+      />
+
+      {/* Legacy Header - Only shown when not navigating */}
+      {!isNavigating && (
+        <LinearGradient colors={['#667eea', '#764ba2']} style={styles.header}>
+          <View style={styles.headerTop}>
+            <TouchableOpacity style={styles.closeButton} onPress={stopNavigation}>
+              <Ionicons name="close" size={24} color="white" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Campus Navigation</Text>
+            <View style={styles.placeholder} />
+          </View>
+          
+          <View style={styles.destinationInfo}>
+            <Text style={styles.destinationName}>{targetVenue.name}</Text>
+            <Text style={styles.destinationDesc}>{targetVenue.description}</Text>
+          </View>
+        </LinearGradient>
+      )}
 
       {/* Navigation Stats */}
       <View style={styles.statsContainer}>
