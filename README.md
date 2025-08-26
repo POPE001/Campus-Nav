@@ -192,4 +192,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
   <strong>Built with ❤️ for the OAU Community</strong>
 </div>
 
-
