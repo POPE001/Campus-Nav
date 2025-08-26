@@ -977,7 +977,7 @@ const EnhancedMapScreen: React.FC<EnhancedMapScreenProps> = ({ navigationParams 
   };
 
   const createEnhancedMapHTML = () => {
-    const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyBYI2ZiWhDcWPV1Bk1-flCIhBKrbVZbQ7w';
+    const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
     
     return `
     <!DOCTYPE html>

@@ -270,7 +270,7 @@ const WebViewMap: React.FC<WebViewMapProps> = ({ navigationParams }) => {
 
   // Create map HTML with proper API key handling
   const createMapHTML = () => {
-    const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyBYI2ZiWhDcWPV1Bk1-flCIhBKrbVZbQ7w';
+    const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
     console.log('🗺️ WEBVIEW MAP - Using API key:', apiKey?.substring(0, 20) + '...');
     
     return `

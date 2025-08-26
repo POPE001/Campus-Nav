@@ -155,9 +155,7 @@ const TRANSPORT_MODES: TransportMode[] = [
 ];
 
 const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 
-                           Constants.expoConfig?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 
-                           'AIzaSyBYI2ZiWhDcWPV1Bk1-flCIhBKrbVZbQ7w';
-
+                           Constants.expoConfig?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 // Navigation utility functions
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
   const R = 6371; // Earth's radius in km

@@ -94,8 +94,7 @@ class NavigationService {
 
   constructor() {
     this.apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 
-                  Constants.expoConfig?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 
-                  'AIzaSyBYI2ZiWhDcWPV1Bk1-flCIhBKrbVZbQ7w';
+                  Constants.expoConfig?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
     this.navigationState = {
       status: 'idle',
       currentRoute: null,
