@@ -714,50 +714,89 @@ const NativeMapScreen: React.FC<NativeMapScreenProps> = ({ navigationParams }) =
   const calculateAllRoutes = async (venue: Venue) => {
     const routes: { [key: string]: RouteInfo } = {};
     
-    if (!state.userLocation) return;
+    if (!state.userLocation) {
+      // Clear calculating state if no location
+      setState(prev => ({ ...prev, isCalculatingRoutes: false }));
+      return;
+    }
     
     console.log('🗺️ NATIVE MAP - Calculating real Google Maps routes for all transport modes...');
 
-    // Calculate routes for each transport mode using Google Maps API
-    for (const mode of TRANSPORT_MODES) {
-      try {
-        const realRouteData = await calculateRealGoogleRoute(
-          state.userLocation.coords.latitude,
-          state.userLocation.coords.longitude,
-          venue.coordinates.latitude,
-          venue.coordinates.longitude,
-          mode.mode,
-          mode.id === 'TWOWHEELER' // Pass scooter flag
-        );
-        
-        routes[mode.id] = {
-          distance: realRouteData.distance,
-          duration: realRouteData.duration,
-          coordinates: [], // Will be populated by MapViewDirections
-          traffic: realRouteData.traffic,
-          trafficDescription: realRouteData.trafficDescription,
-        };
-        
-        console.log(`🚗 ${mode.name}: ${realRouteData.duration} (${realRouteData.distance}) - ${realRouteData.trafficDescription}`);
-        
-      } catch (error) {
-        console.error(`🚫 Error calculating ${mode.name} route:`, error);
-        
-        // Special handling for any ZERO_RESULTS (rare for driving/walking)
-        if ((error as Error).message?.includes('ZERO_RESULTS')) {
-          console.log(`🚫 No ${mode.name.toLowerCase()} routes available for this path`);
+    try {
+      // Calculate routes for each transport mode using Google Maps API with timeout protection
+      const routePromises = TRANSPORT_MODES.map(async (mode) => {
+        try {
+          console.log(`🗺️ NATIVE MAP - Starting route calculation for ${mode.name}...`);
+          
+          // Add timeout protection to each route calculation
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Route calculation timeout')), 10000); // 10 second timeout
+          });
+          
+          const routePromise = calculateRealGoogleRoute(
+            state.userLocation!.coords.latitude,
+            state.userLocation!.coords.longitude,
+            venue.coordinates.latitude,
+            venue.coordinates.longitude,
+            mode.mode,
+            mode.id === 'TWOWHEELER' // Pass scooter flag
+          );
+          
+          const realRouteData = await Promise.race([routePromise, timeoutPromise]) as any;
+          
           routes[mode.id] = {
-            distance: '--',
-            duration: 'Not available',
+            distance: realRouteData.distance,
+            duration: realRouteData.duration,
+            coordinates: [], // Will be populated by MapViewDirections
+            traffic: realRouteData.traffic,
+            trafficDescription: realRouteData.trafficDescription,
+          };
+          
+          console.log(`🚗 ${mode.name}: ${realRouteData.duration} (${realRouteData.distance}) - ${realRouteData.trafficDescription}`);
+          
+        } catch (error) {
+          console.error(`🚫 Error calculating ${mode.name} route:`, error);
+          
+          // Fallback to basic calculation for any errors (including timeouts)
+          const fallbackDistance = calculateDistance(
+            state.userLocation!.coords.latitude,
+            state.userLocation!.coords.longitude,
+            venue.coordinates.latitude,
+            venue.coordinates.longitude
+          );
+          
+          const fallbackDuration = calculateTransportTime(fallbackDistance, mode.mode, mode.id === 'TWOWHEELER');
+          
+          const isTimeout = (error as Error).message?.includes('timeout');
+          const isAPIError = (error as Error).message?.includes('ZERO_RESULTS') || 
+                           (error as Error).message?.includes('API error');
+          
+          routes[mode.id] = {
+            distance: fallbackDistance > 1 ? `${fallbackDistance.toFixed(1)} km` : `${(fallbackDistance * 1000).toFixed(0)} m`,
+            duration: `${Math.round(fallbackDuration)} min`,
             coordinates: [],
             traffic: 'light',
-            trafficDescription: `No ${mode.name.toLowerCase()} routes available`,
+            trafficDescription: isTimeout ? `${mode.name} route (estimated - slow connection)` : 
+                              isAPIError ? `${mode.name} route (estimated - service unavailable)` :
+                              `${mode.name} route (estimated)`,
           };
-        } else {
-          // Fallback to basic calculation for other errors
+          
+          console.log(`🚗 ${mode.name}: Using fallback calculation - ${routes[mode.id].duration} (${routes[mode.id].distance})`);
+        }
+      });
+
+      // Wait for all route calculations to complete (with individual timeouts)
+      await Promise.all(routePromises);
+      
+    } catch (error) {
+      console.error('🚫 NATIVE MAP - Unexpected error in calculateAllRoutes:', error);
+      
+      // Ensure we have fallback routes for all transport modes
+      TRANSPORT_MODES.forEach(mode => {
+        if (!routes[mode.id]) {
           const fallbackDistance = calculateDistance(
-            state.userLocation.coords.latitude,
-            state.userLocation.coords.longitude,
+            state.userLocation!.coords.latitude,
+            state.userLocation!.coords.longitude,
             venue.coordinates.latitude,
             venue.coordinates.longitude
           );
@@ -772,20 +811,22 @@ const NativeMapScreen: React.FC<NativeMapScreenProps> = ({ navigationParams }) =
             trafficDescription: `${mode.name} route (estimated)`,
           };
         }
-      }
+      });
+      
+    } finally {
+      // ALWAYS clear the calculating state, regardless of success or failure
+      console.log('🗺️ NATIVE MAP - Route calculation completed, clearing loading state');
+      setState(prev => ({
+        ...prev,
+        transportRoutes: routes,
+        isCalculatingRoutes: false,
+        lastRouteUpdate: Date.now(),
+        // Auto-select driving if current mode is unavailable
+        selectedTransportMode: routes[prev.selectedTransportMode.id]?.duration === 'Not available' 
+          ? TRANSPORT_MODES[0] // Default to driving
+          : prev.selectedTransportMode,
+      }));
     }
-
-
-    setState(prev => ({
-      ...prev,
-      transportRoutes: routes,
-      isCalculatingRoutes: false,
-      lastRouteUpdate: Date.now(),
-      // Auto-select driving if current mode is unavailable
-      selectedTransportMode: routes[prev.selectedTransportMode.id]?.duration === 'Not available' 
-        ? TRANSPORT_MODES[0] // Default to driving
-        : prev.selectedTransportMode,
-    }));
   };
 
   // Calculate real route using Google Maps Directions API
@@ -814,7 +855,23 @@ const NativeMapScreen: React.FC<NativeMapScreenProps> = ({ navigationParams }) =
       `key=${GOOGLE_MAPS_API_KEY}`;
     
     try {
-      const response = await fetch(url);
+      // Add timeout protection to the fetch request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout for individual API call
+      
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       
       if (data.status === 'OK' && data.routes && data.routes.length > 0) {
@@ -882,8 +939,21 @@ const NativeMapScreen: React.FC<NativeMapScreenProps> = ({ navigationParams }) =
       }
       
     } catch (error) {
-      console.error('🚫 Network error calling Google Directions API:', error);
-      throw error;
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          console.error('🚫 Google Directions API request timed out:', error);
+          throw new Error('Route calculation timeout - API request took too long');
+        } else if (error.message.includes('HTTP error')) {
+          console.error('🚫 Google Directions API HTTP error:', error);
+          throw new Error(`Google Directions API HTTP error: ${error.message}`);
+        } else {
+          console.error('🚫 Network error calling Google Directions API:', error);
+          throw new Error(`Network error: ${error.message}`);
+        }
+      } else {
+        console.error('🚫 Unknown error calling Google Directions API:', error);
+        throw new Error('Unknown error occurred during route calculation');
+      }
     }
   };
 
