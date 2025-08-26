@@ -36,8 +36,7 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
-      "package": "com.crosssafe.campusnav",
-      "googleServicesFile": "./android/app/google-services.json"
+      "package": "com.crosssafe.campusnav"
     },
     "web": {
       "bundler": "metro",

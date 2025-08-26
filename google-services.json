@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "478814104813",
+    "project_id": "campus-nav-e9a5e",
+    "storage_bucket": "campus-nav-e9a5e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:478814104813:android:19bfe9f7f2ff95001270e4",
+        "android_client_info": {
+          "package_name": "com.crosssafe.campusnav"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBbow7quDaN3ERIVIjy_z0K3a2kO-XXbKw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
